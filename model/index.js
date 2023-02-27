@@ -7,18 +7,18 @@ const { createToken } = require('../middleware/AuthenticatedUser');
 //User
 class User {
     login(req, res) {
-        const {emailAdd, userPass} = req.body;
+        const {email, userPass} = req.body;
         const strQry = 
         `
-        SELECT firstName, lastName, gender, emailAdd, userPass, userRole, userProfile
-        FROM Users
-        WHERE emailAdd = '${emailAdd}';
+        SELECT firstName, lastName, gender, email, userPass, userRole, userImage
+        FROM users
+        WHERE email = '${email}';
         `;
         db.query(strQry, async (err, data)=>{
             if(err) throw err;
             if((!data.length) || (data == null)) {
                 res.status(401).json({err: 
-                    "You provide a wrong email address"});
+                    "Incorrect email address"});
             }else {
                 await compare(userPass, 
                     data[0].userPass, 
@@ -28,7 +28,7 @@ class User {
                         const jwToken = 
                         createToken(
                             {
-                                emailAdd, userPass  
+                                email, userPass  
                             }
                         );
                         // Saving
@@ -39,13 +39,13 @@ class User {
                         })
                         if(cResult) {
                             res.status(200).json({
-                                msg: 'Logged in',
+                                msg: 'Logged In',
                                 jwToken,
                                 result: data[0]
                             })
                         }else {
                             res.status(401).json({
-                                err: 'You entered an invalid password or did not register. '
+                                err: 'Incorrect password'
                             })
                         }
                     })
@@ -55,8 +55,8 @@ class User {
     fetchUsers(req, res) {
         const strQry = 
         `
-        SELECT userID, firstName, lastName, gender, cellphoneNumber, emailAdd, userRole, userProfile, joinDate, cart
-        FROM Users;
+        SELECT userId, firstName, lastName, gender, phoneNumber, email, userRole, userImage
+        FROM users;
         `;
         //db
         db.query(strQry, (err, data)=>{
@@ -68,12 +68,12 @@ class User {
     fetchUser(req, res) {
         const strQry = 
         `
-        SELECT userID, firstName, lastName, gender, cellphoneNumber, emailAdd, userRole, userProfile, joinDate, cart
-        FROM Users
-        WHERE userID = ?;
+        SELECT userId, firstName, lastName, gender, phoneNumber, email, userRole, userImage
+        FROM users
+        WHERE userId = ?;
         `;
         //db
-        db.query(strQry,[req.params.id], 
+        db.query(strQry,[req.params.userId], 
             (err, data)=>{
             if(err) throw err;
             else res.status(200).json( 
@@ -83,20 +83,20 @@ class User {
     }
     async createUser(req, res) {
         // Payload
-        let detail = req.body;
+        let info = req.body;
         // Hashing user password
-        detail.userPass = await 
-        hash(detail.userPass, 15);
+        info.userPass = await 
+        hash(info.userPass, 15);
         // This information will be used for authentication.
         let user = {
-            emailAdd: detail.emailAdd,
-            userPass: detail.userPass
+            email: info.email,
+            userPass: info.userPass
         }
         // sql query
         const strQry =
-        `INSERT INTO Users
+        `INSERT INTO users
         SET ?;`;
-        db.query(strQry, [detail], (err)=> {
+        db.query(strQry, [info], (err)=> {
             if(err) {
                 res.status(401).json({err});
             }else {
@@ -108,7 +108,7 @@ class User {
                     maxAge: 3600000,
                     httpOnly: true
                 });
-                res.status(200).json({msg: "A user record was saved."})
+                res.status(200).json({msg: "Successfully added new user."})
             }
         })    
     }
@@ -119,38 +119,37 @@ class User {
             data.userPass = hashSync(data.userPass, 15);
         const strQry = 
         `
-        UPDATE Users
+        UPDATE users
         SET ?
-        WHERE userID = ?;
+        WHERE userId = ?;
         `;
         //db
-        db.query(strQry,[data, req.params.id], 
+        db.query(strQry,[data, req.params.userId], 
             (err)=>{
             if(err) throw err;
             res.status(200).json( {msg: 
-                "A row was affected"} );
+                "Successfully updated user."} );
         })    
     }
     deleteUser(req, res) {
         const strQry = 
         `
-        DELETE FROM Users
-        WHERE userID = ?;
+        DELETE FROM users
+        WHERE userId = ?;
         `;
         //db
-        db.query(strQry,[req.params.id], 
+        db.query(strQry,[req.params.userId], 
             (err)=>{
             if(err) throw err;
             res.status(200).json( {msg: 
-                "A record was removed from a database"} );
+                "Successfully deleted user."} );
         })    
     }
 }
 // Product
 class Product {
     fetchProducts(req, res) {
-        const strQry = `SELECT id, prodName, prodDescription, 
-        levels, prodPrice, prodQuantity, imgURL
+        const strQry = `SELECT id, category, prodName, prodInfo, prodPrice, prodImage
         FROM products;`;
         db.query(strQry, (err, results)=> {
             if(err) throw err;
@@ -158,11 +157,10 @@ class Product {
         });
     }
     fetchProduct(req, res) {
-        const strQry = `SELECT id, prodName, prodDescription, 
-        levels, prodPrice, prodQuantity, imgURL
+        const strQry = `SELECT id,category, prodName, prodInfo, prodPrice, prodImage
         FROM products
-        WHERE id = ?;`;
-        db.query(strQry, [req.params.id], (err, results)=> {
+        WHERE userId = ?;`;
+        db.query(strQry, [req.params.userId], (err, results)=> {
             if(err) throw err;
             res.status(200).json({results: results})
         });
@@ -171,15 +169,15 @@ class Product {
     addProduct(req, res) {
         const strQry = 
         `
-        INSERT INTO Products
+        INSERT INTO products
         SET ?;
         `;
         db.query(strQry,[req.body],
             (err)=> {
                 if(err){
-                    res.status(400).json({err: "Unable to insert a new record."});
+                    res.status(400).json({err: "Unable to create new product."});
                 }else {
-                    res.status(200).json({msg: "Product saved"});
+                    res.status(200).json({msg: "Product successfully added."});
                 }
             }
         );    
@@ -188,16 +186,16 @@ class Product {
     updateProduct(req, res) {
         const strQry = 
         `
-        UPDATE Products
+        UPDATE products
         SET ?
-        WHERE id = ?
+        WHERE userId = ?
         `;
-        db.query(strQry,[req.body, req.params.id],
+        db.query(strQry,[req.body, req.params.userId],
             (err)=> {
                 if(err){
-                    res.status(400).json({err: "Unable to update a record."});
+                    res.status(400).json({err: "Could not update product."});
                 }else {
-                    res.status(200).json({msg: "Product updated"});
+                    res.status(200).json({msg: "Product successfully updated"});
                 }
             }
         );    
@@ -206,12 +204,12 @@ class Product {
     deleteProduct(req, res) {
         const strQry = 
         `
-        DELETE FROM Products
-        WHERE id = ?;
+        DELETE FROM products
+        WHERE userId = ?;
         `;
         db.query(strQry,[req.params.id], (err)=> {
-            if(err) res.status(400).json({err: "The record was not found."});
-            res.status(200).json({msg: "A product was deleted."});
+            if(err) res.status(400).json({err: "Product not found."});
+            res.status(200).json({msg: "Successfully deleted product."});
         })
     }
 
